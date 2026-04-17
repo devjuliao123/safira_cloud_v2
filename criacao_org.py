@@ -2,7 +2,6 @@ from flask import Flask, request, jsonify, render_template, render_template_stri
 import psycopg2
 import uuid
 import re
-from werkzeug.security import generate_password_hash
 
 app = Flask(__name__)
 
@@ -56,30 +55,8 @@ def inicializar():
             id SERIAL PRIMARY KEY,
             numero INT UNIQUE NOT NULL,
             nome TEXT NOT NULL,
-            nome_unidade TEXT,
             schema TEXT NOT NULL,
             qtd_usuarios_limite INT DEFAULT 1,
-            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS public.tbl_usuarios (
-            id SERIAL PRIMARY KEY,
-            email TEXT UNIQUE NOT NULL,
-            senha TEXT NOT NULL,
-            organizacao_id INT REFERENCES public.tbl_organizacoes(id),
-            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS public.tbl_convites_usuarios (
-            id SERIAL PRIMARY KEY,
-            email TEXT NOT NULL,
-            token TEXT UNIQUE NOT NULL,
-            organizacao_id INT REFERENCES public.tbl_organizacoes(id),
-            usado BOOLEAN DEFAULT FALSE,
             criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -152,32 +129,15 @@ def index():
                                 class="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none">
                         </div>
 
-                        <div class="flex items-center gap-2 py-2">
-                            <input type="checkbox" id="cadastrar_usuario" class="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500" onchange="toggleEmail()">
-                            <label for="cadastrar_usuario" class="text-sm font-medium text-slate-700">Cadastrar primeiro usuário agora</label>
-                        </div>
-
-                        <div id="email_container" class="hidden">
-                            <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Email do Primeiro Usuário</label>
-                            <input type="email" id="email" placeholder="usuario@email.com"
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Quantidade de Usuários</label>
+                            <input type="number" id="qtd_usuarios" value="1" min="1"
                                 class="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none">
                         </div>
     """
 
-    # Localizar os blocos originais (Nome da Unidade e Botão Provisionar) e substituir
-    # Primeiro, removemos o campo de Nome da Unidade original
+    # Substituir campo original Nome da Unidade
     html = re.sub(r'<div>\s*<label[^>]*>Nome da Unidade</label>\s*<input[^>]*id="nome"[^>]*>\s*</div>', novos_campos, html, flags=re.DOTALL)
-    # Segundo, removemos o botão "Provisionar" original e o substituímos pelos novos campos + botão,
-    # ou melhor, removemos o campo "Próximo Schema" e o substituímos pelos novos campos,
-    # mas o usuário quer remover "Nome da Unidade" e "Quantidade de usuários".
-
-    # O index.html original tinha:
-    # <div>Próximo Schema...</div>
-    # <div>Nome da Unidade...</div>
-    # <button>Provisionar</button>
-
-    # Minha abordagem anterior já substituiu "Nome da Unidade" por "Nome da Org" + "Checkbox" + "Email".
-    # Agora preciso garantir que nada de "Quantidade de usuários" ou "Nome da Unidade" original sobrou.
 
     # 5. JS para animação da nuvem e atualização do próximo schema
     script_js = """
@@ -196,10 +156,10 @@ def index():
             }
         };
 
-        // Sobrescrever listarOrgs para incluir novas colunas e botões
+        // Sobrescrever listarOrgs para atualizar o próximo ID
         window.listarOrgs = async function() {
             const grid = document.getElementById("gridBody");
-            grid.innerHTML = `<tr><td colspan="4" class="p-6 text-center text-slate-400 italic">Sincronizando...</td></tr>`;
+            grid.innerHTML = `<tr><td colspan="3" class="p-6 text-center text-slate-400 italic">Sincronizando...</td></tr>`;
 
             try {
                 const res = await fetch("/organizacoes");
@@ -207,13 +167,6 @@ def index():
 
                 grid.innerHTML = "";
                 data.forEach(org => {
-                    const btnAtivar = org.pode_ativar
-                        ? `<button onclick="ativarUsuario(${org.id})" class="text-xs bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded">Ativar usuário</button>`
-                        : "";
-
-                    const statusClass = org.status_usuario === "Ativo" ? "text-emerald-600" : "text-amber-600";
-                    const pulse = org.status_usuario === "Ativo" ? '<span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>' : "";
-
                     grid.innerHTML += `
                         <tr class="hover:bg-blue-50/50 transition-colors">
                             <td class="px-6 py-4 font-mono text-xs text-blue-600 font-semibold">${org.schema}</td>
@@ -224,21 +177,12 @@ def index():
                                     ATIVO
                                 </span>
                             </td>
-                            <td class="px-6 py-4">
-                                <div class="flex items-center justify-between gap-2">
-                                    <span class="flex items-center gap-1.5 ${statusClass} text-xs font-bold">
-                                        ${pulse}
-                                        ${org.status_usuario.toUpperCase()}
-                                    </span>
-                                    ${btnAtivar}
-                                </div>
-                            </td>
                         </tr>
                     `;
                 });
                 document.getElementById("totalOrgs").innerText = `${data.length} Organizações`;
             } catch (e) {
-                grid.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-slate-400">Nenhum registro encontrado.</td></tr>`;
+                grid.innerHTML = `<tr><td colspan="3" class="p-8 text-center text-slate-400">Nenhum registro encontrado.</td></tr>`;
             }
 
             try {
@@ -251,49 +195,15 @@ def index():
             lucide.createIcons();
         };
 
-        window.toggleEmail = function() {
-            const checkbox = document.getElementById("cadastrar_usuario");
-            const container = document.getElementById("email_container");
-            container.className = checkbox.checked ? "block" : "hidden";
-        };
-
-        window.ativarUsuario = async function(orgId) {
-            const email = prompt("Informe o email para ativar o primeiro usuário:");
-            if (!email) return;
-
-            try {
-                const res = await fetch("/ativar-usuario", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ org_id: orgId, email })
-                });
-                const data = await res.json();
-                if (data.status === "ok") {
-                    alert("Convite enviado com sucesso! Link: " + data.link_convite);
-                    listarOrgs();
-                } else {
-                    alert("Erro: " + data.mensagem);
-                }
-            } catch (e) {
-                alert("Erro ao enviar convite.");
-            }
-        };
-
         // Sobrescrever função criar original
         window.criar = async function() {
             const btn = document.getElementById("btnCriar");
             const nome_org = document.getElementById("nome_org").value;
-            const cadastrar_usuario = document.getElementById("cadastrar_usuario").checked;
-            const email = document.getElementById("email").value;
+            const qtd_usuarios = document.getElementById("qtd_usuarios").value;
             const container = document.getElementById("statusContainer");
 
             if (!nome_org) {
                 alert("Nome da organização é obrigatório.");
-                return;
-            }
-
-            if (cadastrar_usuario && !email) {
-                alert("Email é obrigatório quando o cadastro de usuário está marcado.");
                 return;
             }
 
@@ -307,8 +217,7 @@ def index():
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         nome: nome_org,
-                        cadastrar_usuario,
-                        email: cadastrar_usuario ? email : null
+                        qtd_usuarios: parseInt(qtd_usuarios)
                     })
                 });
 
@@ -317,13 +226,10 @@ def index():
                 if (data.status === "ok") {
                     container.className = "mt-4 p-4 rounded-lg border bg-emerald-50 border-emerald-200 text-emerald-700 block";
                     document.getElementById("msgHeader").innerText = "Sucesso!";
-                    const info = data.link_convite ? `Convite enviado para ${email}. Link: ${data.link_convite}` : `Organização ${data.schema} criada.`;
-                    document.getElementById("msgBody").innerText = info;
+                    document.getElementById("msgBody").innerText = `Organização ${data.schema} criada com sucesso.`;
 
                     document.getElementById("nome_org").value = "";
-                    document.getElementById("cadastrar_usuario").checked = false;
-                    document.getElementById("email").value = "";
-                    toggleEmail();
+                    document.getElementById("qtd_usuarios").value = "1";
 
                     listarOrgs();
                 } else {
@@ -344,13 +250,6 @@ def index():
         setTimeout(animaNuvem, 500);
     </script>
     """
-    # 7. Ajuste no cabeçalho da tabela do Grid
-    html = html.replace(
-        '<th class="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>',
-        '<th class="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>\n                                    <th class="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Primeiro usuário</th>'
-    )
-
-    # Usando render_template_string para garantir que o Jinja2 renderize o conteúdo original se houver
     return render_template_string(html.replace('</body>', f"{script_js}</body>"))
 
 @app.route("/proximo-id")
@@ -362,53 +261,27 @@ def get_proximo_id():
 
 @app.route("/organizacoes")
 def listar_orgs():
-    """Retorna a lista de organizações para o Grid View com status do usuário"""
+    """Retorna a lista de organizações para o Grid View"""
     conn = conectar()
     if not conn: return jsonify([])
 
     cur = conn.cursor()
-    # Verifica se existe usuário ou convite pendente
-    cur.execute("""
-        SELECT
-            o.numero,
-            o.nome,
-            o.schema,
-            o.id,
-            EXISTS(SELECT 1 FROM public.tbl_usuarios u WHERE u.organizacao_id = o.id) as tem_usuario,
-            EXISTS(SELECT 1 FROM public.tbl_convites_usuarios c WHERE c.organizacao_id = o.id AND c.usado = FALSE) as tem_convite
-        FROM public.tbl_organizacoes o
-        ORDER BY o.numero DESC
-    """)
+    cur.execute("SELECT numero, nome, schema FROM public.tbl_organizacoes ORDER BY numero DESC")
     rows = cur.fetchall()
     cur.close()
     conn.close()
 
-    lista = []
-    for r in rows:
-        status_usuario = "Ativo" if r[4] else "Não ativo"
-        lista.append({
-            "numero": r[0],
-            "nome": r[1],
-            "schema": r[2],
-            "id": r[3],
-            "status_usuario": status_usuario,
-            "pode_ativar": not r[4] and not r[5]
-        })
+    lista = [{"numero": r[0], "nome": r[1], "schema": r[2]} for r in rows]
     return jsonify(lista)
 
 @app.route("/criar-organizacao", methods=["POST"])
 def criar_org():
     data = request.json
     nome = data.get("nome")
-    cadastrar_usuario = data.get("cadastrar_usuario", False)
-    email = data.get("email")
+    qtd_usuarios = data.get("qtd_usuarios", 1)
 
     if not nome:
         return jsonify({"status": "erro", "mensagem": "Nome da organização é obrigatório"}), 400
-
-    if cadastrar_usuario:
-        if not email or not re.match(r"[^@]+@[^@]+\.[^@]+", email):
-            return jsonify({"status": "erro", "mensagem": "Email inválido ou não fornecido"}), 400
 
     conn = conectar()
     if not conn:
@@ -423,9 +296,9 @@ def criar_org():
 
         # 2. Registra na tabela pública
         cur.execute("""
-            INSERT INTO public.tbl_organizacoes (numero, nome, schema)
-            VALUES (%s, %s, %s) RETURNING id
-        """, (numero, nome, schema))
+            INSERT INTO public.tbl_organizacoes (numero, nome, schema, qtd_usuarios_limite)
+            VALUES (%s, %s, %s, %s) RETURNING id
+        """, (numero, nome, schema, qtd_usuarios))
         org_id = cur.fetchone()[0]
 
         # 3. Cria o Schema físico
@@ -434,163 +307,15 @@ def criar_org():
         # 4. Popula o schema com as tabelas do schema_base.sql
         executar_schema(conn, schema)
 
-        link_convite = None
-        if cadastrar_usuario:
-            # 5. Gera token de convite
-            token = str(uuid.uuid4())
-            cur.execute("""
-                INSERT INTO public.tbl_convites_usuarios (email, token, organizacao_id)
-                VALUES (%s, %s, %s)
-            """, (email, token, org_id))
-            link_convite = f"/primeiro-acesso?token={token}"
-            print(f"SIMULAÇÃO ENVIO EMAIL PARA {email}: Bem-vindo! Crie sua conta aqui: {link_convite}")
-
         conn.commit()
         cur.close()
         conn.close()
 
-        return jsonify({"status": "ok", "schema": schema, "link_convite": link_convite})
+        return jsonify({"status": "ok", "schema": schema})
 
     except Exception as e:
         if conn: conn.close()
         return jsonify({"status": "erro", "mensagem": str(e)}), 500
-
-@app.route("/ativar-usuario", methods=["POST"])
-def ativar_usuario():
-    data = request.json
-    org_id = data.get("org_id")
-    email = data.get("email")
-
-    if not org_id or not email:
-        return jsonify({"status": "erro", "mensagem": "ID da organização e email são obrigatórios"}), 400
-
-    if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
-        return jsonify({"status": "erro", "mensagem": "Email inválido"}), 400
-
-    conn = conectar()
-    if not conn:
-        return jsonify({"status": "erro", "mensagem": "Erro de conexão com o banco"}), 500
-
-    try:
-        cur = conn.cursor()
-
-        # 1. Verifica se já existe um usuário ativo
-        cur.execute("SELECT 1 FROM public.tbl_usuarios WHERE organizacao_id = %s", (org_id,))
-        if cur.fetchone():
-            return jsonify({"status": "erro", "mensagem": "Esta organização já possui um usuário ativo"}), 400
-
-        # 2. Verifica se já existe um convite pendente
-        cur.execute("SELECT 1 FROM public.tbl_convites_usuarios WHERE organizacao_id = %s AND usado = FALSE", (org_id,))
-        if cur.fetchone():
-            return jsonify({"status": "erro", "mensagem": "Já existe um convite pendente para esta organização"}), 400
-
-        # 3. Gera novo convite
-        token = str(uuid.uuid4())
-        cur.execute("""
-            INSERT INTO public.tbl_convites_usuarios (email, token, organizacao_id)
-            VALUES (%s, %s, %s)
-        """, (email, token, org_id))
-
-        conn.commit()
-        cur.close()
-        conn.close()
-
-        link_convite = f"/primeiro-acesso?token={token}"
-        print(f"SIMULAÇÃO ENVIO EMAIL ATIVAÇÃO PARA {email}: Link: {link_convite}")
-
-        return jsonify({"status": "ok", "link_convite": link_convite})
-
-    except Exception as e:
-        if conn: conn.close()
-        return jsonify({"status": "erro", "mensagem": str(e)}), 500
-
-@app.route("/primeiro-acesso")
-def primeiro_acesso():
-    token = request.args.get("token")
-    if not token:
-        return "Token não fornecido", 400
-
-    conn = conectar()
-    cur = conn.cursor()
-    cur.execute("SELECT email, organizacao_id FROM public.tbl_convites_usuarios WHERE token = %s AND usado = FALSE", (token,))
-    convite = cur.fetchone()
-    cur.close()
-    conn.close()
-
-    if not convite:
-        return "Convite inválido ou já utilizado", 400
-
-    email = convite[0]
-
-    # Usando render_template_string com placeholders para evitar XSS
-    template_primeiro_acesso = """
-    <!DOCTYPE html>
-    <html lang="pt-br">
-    <head>
-        <meta charset="UTF-8">
-        <title>Primeiro Acesso | Safira Cloud</title>
-        <script src="https://cdn.tailwindcss.com"></script>
-    </head>
-    <body class="bg-slate-50 flex items-center justify-center min-h-screen">
-        <div class="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 w-full max-w-md">
-            <h1 class="text-2xl font-bold text-blue-600 mb-6">Definir Senha</h1>
-            <p class="text-slate-500 mb-4">Olá <strong>{{ email }}</strong>, crie sua senha para acessar o sistema.</p>
-            <form action="/finalizar-cadastro" method="POST" class="space-y-4">
-                <input type="hidden" name="token" value="{{ token }}">
-                <div>
-                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Nova Senha</label>
-                    <input type="password" name="senha" required class="w-full px-4 py-3 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
-                </div>
-                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-all">
-                    Confirmar e Acessar
-                </button>
-            </form>
-        </div>
-    </body>
-    </html>
-    """
-    return render_template_string(template_primeiro_acesso, email=email, token=token)
-
-@app.route("/finalizar-cadastro", methods=["POST"])
-def finalizar_cadastro():
-    token = request.form.get("token")
-    senha = request.form.get("senha")
-
-    if not token or not senha:
-        return "Dados incompletos", 400
-
-    conn = conectar()
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT email, organizacao_id FROM public.tbl_convites_usuarios WHERE token = %s AND usado = FALSE", (token,))
-        convite = cur.fetchone()
-
-        if not convite:
-            return "Convite inválido", 400
-
-        email, org_id = convite
-        senha_hash = generate_password_hash(senha)
-
-        cur.execute("""
-            INSERT INTO public.tbl_usuarios (email, senha, organizacao_id)
-            VALUES (%s, %s, %s)
-        """, (email, senha_hash, org_id))
-
-        cur.execute("UPDATE public.tbl_convites_usuarios SET usado = TRUE WHERE token = %s", (token,))
-
-        conn.commit()
-        cur.close()
-        conn.close()
-
-        return """
-        <div style="text-align:center; padding:50px; font-family:sans-serif;">
-            <h1 style="color:#2563eb;">Cadastro Finalizado!</h1>
-            <p>Seu usuário foi criado com sucesso. Agora você pode fazer login na Safira Cloud.</p>
-        </div>
-        """
-    except Exception as e:
-        if conn: conn.close()
-        return str(e), 500
 
 if __name__ == "__main__":
     inicializar()
