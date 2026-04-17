@@ -104,30 +104,45 @@ def index():
     except FileNotFoundError:
         return "Template não encontrado", 404
 
-    # 0. Estilos Dark Mode
-    dark_styles = """
-    <style id="dark-mode-styles">
-        .dark body { background-color: #0f172a; color: #f8fafc; }
-        .dark .bg-grid { background-image: radial-gradient(circle, #334155 1px, transparent 1px); }
+    # 0. Estilos Globais e Dark Mode Refinados
+    custom_styles = """
+    <style id="theme-styles">
+        /* Transições Suaves */
+        body, div, header, section, table, tr, td, input, button {
+            transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+        }
+
+        /* Tema Claro (White) */
+        body { background-color: #f8fafc; color: #334155; }
+        #theme-toggle { background-color: #1e293b; border-color: #1e293b; }
+        #theme-toggle i { color: #ffffff; }
+
+        /* Tema Escuro (Dark) */
+        .dark body { background-color: #0f172a; color: #f1f5f9; }
+        .dark .bg-grid { background-image: radial-gradient(circle, #1e293b 2px, transparent 0.5px); }
         .dark .bg-white { background-color: #1e293b !important; border-color: #334155 !important; }
         .dark .border-slate-200, .dark .border-slate-100 { border-color: #334155 !important; }
+
+        /* Harmonização de Fontes e Cores no Dark Mode */
+        .dark h1, .dark h2, .dark label, .dark .text-slate-800, .dark .text-slate-700 { color: #f8fafc !important; }
         .dark .text-slate-500, .dark .text-slate-400 { color: #94a3b8 !important; }
-        .dark .text-slate-700, .dark .text-slate-800 { color: #e2e8f0 !important; }
         .dark .bg-slate-50 { background-color: #0f172a !important; }
-        .dark input { background-color: #1e293b !important; color: #f8fafc !important; border-color: #334155 !important; }
+
+        /* Inputs e Tabelas no Dark Mode */
+        .dark input { background-color: #0f172a !important; color: #ffffff !important; border-color: #334155 !important; }
         .dark table thead tr { background-color: #1e293b !important; }
         .dark table tbody tr:hover { background-color: #334155 !important; }
-        /* Branding e IDs em Branco no Dark Mode */
-        .dark .text-blue-600, .dark .text-blue-400, .dark .text-slate-400 { color: #ffffff !important; }
-        /* Botão de Tema Proporcional (Contraste) */
-        #theme-toggle { background-color: #1e293b; border-color: #334155; }
-        #theme-toggle i { color: #ffffff; }
-        .dark #theme-toggle { background-color: #f8fafc !important; border-color: #f8fafc !important; }
-        .dark #theme-toggle i { color: #0f172a !important; }
+
+        /* Branding e Identificadores (High Contrast) */
+        .dark .text-blue-600, .dark .text-blue-500, .dark .text-blue-400, .dark .font-mono { color: #ffffff !important; }
         .dark .text-emerald-600 { color: #4ade80 !important; }
+
+        /* Botão de Tema Proporcional (Claro no Dark, Escuro no Light) */
+        .dark #theme-toggle { background-color: #f8fafc !important; border-color: #f8fafc !important; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+        .dark #theme-toggle i { color: #0f172a !important; }
     </style>
     """
-    html = html.replace('</head>', f'{dark_styles}</head>')
+    html = html.replace('</head>', f'{custom_styles}</head>')
 
     # 1. Alteração de Branding: Safira SaaS Control -> Safira Cloud
     html = html.replace(
