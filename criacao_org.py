@@ -117,6 +117,14 @@ def index():
         .dark input { background-color: #1e293b !important; color: #f8fafc !important; border-color: #334155 !important; }
         .dark table thead tr { background-color: #1e293b !important; }
         .dark table tbody tr:hover { background-color: #334155 !important; }
+        /* Branding e IDs em Branco no Dark Mode */
+        .dark .text-blue-600, .dark .text-blue-400, .dark .text-slate-400 { color: #ffffff !important; }
+        /* Botão de Tema Proporcional (Contraste) */
+        #theme-toggle { background-color: #1e293b; border-color: #334155; }
+        #theme-toggle i { color: #ffffff; }
+        .dark #theme-toggle { background-color: #f8fafc !important; border-color: #f8fafc !important; }
+        .dark #theme-toggle i { color: #0f172a !important; }
+        .dark .text-emerald-600 { color: #4ade80 !important; }
     </style>
     """
     html = html.replace('</head>', f'{dark_styles}</head>')
@@ -138,8 +146,8 @@ def index():
 
     # 3.1 Botão Dark Mode no Header
     dark_toggle = """
-                <button onclick="toggleDark()" class="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 transition-colors mr-2">
-                    <i data-lucide="moon" class="w-4 h-4 text-slate-600" id="dark-icon"></i>
+                <button id="theme-toggle" onclick="toggleDark()" class="p-2 rounded-lg transition-colors mr-2 flex items-center justify-center border shadow-lg">
+                    <i data-lucide="moon" class="w-4 h-4" id="dark-icon"></i>
                 </button>
     """
     html = html.replace('<span id="totalOrgs"', f'{dark_toggle}<span id="totalOrgs"')
@@ -220,7 +228,10 @@ def index():
             try {
                 const r = await fetch("/proximo-id");
                 const d = await r.json();
-                if (d.sucesso) document.getElementById("numero_display").value = d.proximo;
+                if (d.sucesso) {
+                    const input = document.getElementById("numero_display");
+                    if (input) input.value = d.proximo;
+                }
             } catch (e) {}
             lucide.createIcons();
         };
@@ -286,8 +297,14 @@ def listar_orgs():
 def criar_org():
     data = request.json
     nome = data.get("nome")
-    qtd_usuarios = data.get("qtd_usuarios", 1)
+    try:
+        qtd_usuarios = int(data.get("qtd_usuarios", 1))
+    except (ValueError, TypeError):
+        qtd_usuarios = 1
+
     if not nome: return jsonify({"status": "erro", "mensagem": "Nome é obrigatório"}), 400
+    if qtd_usuarios < 1: return jsonify({"status": "erro", "mensagem": "Quantidade de usuários deve ser >= 1"}), 400
+
     conn = conectar()
     if not conn: return jsonify({"status": "erro", "mensagem": "Erro de conexão"}), 500
     try:
