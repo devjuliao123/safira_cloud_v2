@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestão ERP | Safira Softwares</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .bg-grid { background-size: 20px 20px; background-image: radial-gradient(circle, #e2e8f0 1px, transparent 1px); }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen bg-grid p-6">
+
+    <div class="max-w-5xl mx-auto space-y-8">
+        
+        <header class="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <div>
+                <h1 class="text-2xl font-bold text-blue-600 flex items-center gap-2">
+                    <i data-lucide="layers" class="w-8 h-8"></i>
+                    Safira <span class="text-slate-400 font-light">SaaS Control</span>
+                </h1>
+                <p class="text-slate-500 text-sm">Gerenciamento de instâncias e schemas isolados</p>
+            </div>
+            <div class="text-right">
+                <span id="totalOrgs" class="bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+                    Carregando...
+                </span>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <div class="lg:col-span-1 space-y-6">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <h2 class="text-lg font-semibold mb-6 flex items-center gap-2">
+                        <i data-lucide="plus-circle" class="w-5 h-5 text-blue-500"></i>
+                        Nova Organização
+                    </h2>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Próximo Schema</label>
+                            <input type="text" id="numero_display" value="AUTO-SEQUENCE" readonly
+                                class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-blue-600 font-mono text-sm outline-none cursor-not-allowed">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Nome da Unidade</label>
+                            <input type="text" id="nome" placeholder="Ex: Matriz São Paulo"
+                                class="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none">
+                        </div>
+
+                        <button onclick="criar()" id="btnCriar"
+                            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-200">
+                            <i data-lucide="zap" class="w-4 h-4"></i>
+                            Provisionar
+                        </button>
+                    </div>
+
+                    <div id="statusContainer" class="hidden mt-4 p-4 rounded-lg border text-sm animate-pulse">
+                        <p id="msgHeader" class="font-bold"></p>
+                        <p id="msgBody" class="text-xs"></p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-2">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+                        <h2 class="text-lg font-semibold flex items-center gap-2">
+                            <i data-lucide="layout-grid" class="w-5 h-5 text-blue-500"></i>
+                            Organizações Ativas
+                        </h2>
+                        <button onclick="listarOrgs()" class="text-slate-400 hover:text-blue-600 transition-colors">
+                            <i data-lucide="rotate-cw" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50">
+                                    <th class="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">ID / Schema</th>
+                                    <th class="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Nome da Organização</th>
+                                    <th class="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="gridBody" class="divide-y divide-slate-100">
+                                </tbody>
+                        </table>
+                    </div>
+                    
+                    <div id="emptyState" class="hidden p-12 text-center text-slate-400">
+                        <i data-lucide="database" class="w-12 h-12 mx-auto mb-3 opacity-20"></i>
+                        <p>Nenhuma organização encontrada no banco.</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        // Carregar a lista ao iniciar
+        window.onload = listarOrgs;
+
+        // Nota: Para listar, você precisará de uma rota no app.py que retorne o SELECT da tbl_organizacoes
+        // Vou simular a chamada, mas a lógica de criação continua a mesma que você enviou.
+
+        async function listarOrgs() {
+            const grid = document.getElementById("gridBody");
+            // Nota: Se você ainda não criou a rota /listar no Flask, o grid ficará vazio.
+            // Aqui estamos focando no design.
+            grid.innerHTML = `<tr><td colspan="3" class="p-6 text-center text-slate-400 italic">Sincronizando com o banco de dados...</td></tr>`;
+            
+            try {
+                // Simulando a listagem (Ideal: criar @app.route("/organizacoes") no app.py)
+                const res = await fetch("/organizacoes"); // Caso você crie esta rota
+                const data = await res.json();
+                
+                if (data.length === 0) throw new Error();
+
+                grid.innerHTML = "";
+                data.forEach(org => {
+                    grid.innerHTML += `
+                        <tr class="hover:bg-blue-50/50 transition-colors">
+                            <td class="px-6 py-4 font-mono text-xs text-blue-600 font-semibold">${org.schema}</td>
+                            <td class="px-6 py-4 text-sm font-medium text-slate-700">${org.nome}</td>
+                            <td class="px-6 py-4">
+                                <span class="flex items-center gap-1.5 text-emerald-600 text-xs font-bold">
+                                    <span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                                    ATIVO
+                                </span>
+                            </td>
+                        </tr>
+                    `;
+                });
+                document.getElementById("totalOrgs").innerText = `${data.length} Organizações`;
+            } catch (e) {
+                grid.innerHTML = `<tr><td colspan="3" class="p-8 text-center text-slate-400">Aguardando novos registros...</td></tr>`;
+                document.getElementById("totalOrgs").innerText = `0 Organizações`;
+            }
+            lucide.createIcons();
+        }
+
+        async function criar() {
+            const btn = document.getElementById("btnCriar");
+            const nome = document.getElementById("nome").value;
+            const container = document.getElementById("statusContainer");
+            
+            if (!nome) return;
+
+            btn.disabled = true;
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Criando...`;
+            lucide.createIcons();
+
+            try {
+                const res = await fetch("/criar-organizacao", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ nome })
+                });
+
+                const data = await res.json();
+
+                if (data.status === "ok") {
+                    container.className = "mt-4 p-4 rounded-lg border bg-emerald-50 border-emerald-200 text-emerald-700 block";
+                    document.getElementById("msgHeader").innerText = "Sucesso!";
+                    document.getElementById("msgBody").innerText = `Instância ${data.schema} pronta.`;
+                    document.getElementById("nome").value = "";
+                    listarOrgs(); // Atualiza o grid automaticamente
+                } else {
+                    throw new Error(data.mensagem);
+                }
+            } catch (err) {
+                container.className = "mt-4 p-4 rounded-lg border bg-red-50 border-red-200 text-red-700 block";
+                document.getElementById("msgHeader").innerText = "Erro";
+                document.getElementById("msgBody").innerText = err.message;
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `<i data-lucide="zap" class="w-4 h-4"></i> Provisionar`;
+                lucide.createIcons();
+            }
+        }
+    </script>
+</body>
+</html>
