@@ -152,28 +152,32 @@ def index():
                                 class="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none">
                         </div>
 
-                        <div>
-                            <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Nome da Unidade</label>
-                            <input type="text" id="nome_unidade" placeholder="Ex: Matriz São Paulo"
-                                class="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none">
+                        <div class="flex items-center gap-2 py-2">
+                            <input type="checkbox" id="cadastrar_usuario" class="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500" onchange="toggleEmail()">
+                            <label for="cadastrar_usuario" class="text-sm font-medium text-slate-700">Cadastrar primeiro usuário agora</label>
                         </div>
 
-                        <div>
+                        <div id="email_container" class="hidden">
                             <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Email do Primeiro Usuário</label>
                             <input type="email" id="email" placeholder="usuario@email.com"
                                 class="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none">
                         </div>
-
-                        <div>
-                            <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Quantidade de Usuários</label>
-                            <input type="number" id="qtd_usuarios" value="1" min="1"
-                                class="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none">
-                        </div>
     """
 
-    # Localizar o bloco original do Nome da Unidade e substituir
-    ponto_insercao = re.compile(r'<div>\s*<label[^>]*>Nome da Unidade</label>\s*<input[^>]*id="nome"[^>]*>\s*</div>', re.DOTALL)
-    html = ponto_insercao.sub(novos_campos, html)
+    # Localizar os blocos originais (Nome da Unidade e Botão Provisionar) e substituir
+    # Primeiro, removemos o campo de Nome da Unidade original
+    html = re.sub(r'<div>\s*<label[^>]*>Nome da Unidade</label>\s*<input[^>]*id="nome"[^>]*>\s*</div>', novos_campos, html, flags=re.DOTALL)
+    # Segundo, removemos o botão "Provisionar" original e o substituímos pelos novos campos + botão,
+    # ou melhor, removemos o campo "Próximo Schema" e o substituímos pelos novos campos,
+    # mas o usuário quer remover "Nome da Unidade" e "Quantidade de usuários".
+
+    # O index.html original tinha:
+    # <div>Próximo Schema...</div>
+    # <div>Nome da Unidade...</div>
+    # <button>Provisionar</button>
+
+    # Minha abordagem anterior já substituiu "Nome da Unidade" por "Nome da Org" + "Checkbox" + "Email".
+    # Agora preciso garantir que nada de "Quantidade de usuários" ou "Nome da Unidade" original sobrou.
 
     # 5. JS para animação da nuvem e atualização do próximo schema
     script_js = """
@@ -192,10 +196,51 @@ def index():
             }
         };
 
-        // Sobrescrever listarOrgs para atualizar o próximo ID após criação/refresh
-        const originalListarOrgs = window.listarOrgs;
+        // Sobrescrever listarOrgs para incluir novas colunas e botões
         window.listarOrgs = async function() {
-            await originalListarOrgs();
+            const grid = document.getElementById("gridBody");
+            grid.innerHTML = `<tr><td colspan="4" class="p-6 text-center text-slate-400 italic">Sincronizando...</td></tr>`;
+
+            try {
+                const res = await fetch("/organizacoes");
+                const data = await res.json();
+
+                grid.innerHTML = "";
+                data.forEach(org => {
+                    const btnAtivar = org.pode_ativar
+                        ? `<button onclick="ativarUsuario(${org.id})" class="text-xs bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded">Ativar usuário</button>`
+                        : "";
+
+                    const statusClass = org.status_usuario === "Ativo" ? "text-emerald-600" : "text-amber-600";
+                    const pulse = org.status_usuario === "Ativo" ? '<span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>' : "";
+
+                    grid.innerHTML += `
+                        <tr class="hover:bg-blue-50/50 transition-colors">
+                            <td class="px-6 py-4 font-mono text-xs text-blue-600 font-semibold">${org.schema}</td>
+                            <td class="px-6 py-4 text-sm font-medium text-slate-700">${org.nome}</td>
+                            <td class="px-6 py-4">
+                                <span class="flex items-center gap-1.5 text-emerald-600 text-xs font-bold">
+                                    <span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                                    ATIVO
+                                </span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="flex items-center gap-1.5 ${statusClass} text-xs font-bold">
+                                        ${pulse}
+                                        ${org.status_usuario.toUpperCase()}
+                                    </span>
+                                    ${btnAtivar}
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+                document.getElementById("totalOrgs").innerText = `${data.length} Organizações`;
+            } catch (e) {
+                grid.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-slate-400">Nenhum registro encontrado.</td></tr>`;
+            }
+
             try {
                 const r = await fetch("/proximo-id");
                 const d = await r.json();
@@ -203,19 +248,52 @@ def index():
                     document.getElementById("numero_display").value = d.proximo;
                 }
             } catch (e) {}
+            lucide.createIcons();
+        };
+
+        window.toggleEmail = function() {
+            const checkbox = document.getElementById("cadastrar_usuario");
+            const container = document.getElementById("email_container");
+            container.className = checkbox.checked ? "block" : "hidden";
+        };
+
+        window.ativarUsuario = async function(orgId) {
+            const email = prompt("Informe o email para ativar o primeiro usuário:");
+            if (!email) return;
+
+            try {
+                const res = await fetch("/ativar-usuario", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ org_id: orgId, email })
+                });
+                const data = await res.json();
+                if (data.status === "ok") {
+                    alert("Convite enviado com sucesso! Link: " + data.link_convite);
+                    listarOrgs();
+                } else {
+                    alert("Erro: " + data.mensagem);
+                }
+            } catch (e) {
+                alert("Erro ao enviar convite.");
+            }
         };
 
         // Sobrescrever função criar original
         window.criar = async function() {
             const btn = document.getElementById("btnCriar");
             const nome_org = document.getElementById("nome_org").value;
-            const nome_unidade = document.getElementById("nome_unidade").value;
+            const cadastrar_usuario = document.getElementById("cadastrar_usuario").checked;
             const email = document.getElementById("email").value;
-            const qtd_usuarios = document.getElementById("qtd_usuarios").value;
             const container = document.getElementById("statusContainer");
 
-            if (!nome_org || !email || !nome_unidade) {
-                alert("Por favor preencha todos os campos obrigatórios.");
+            if (!nome_org) {
+                alert("Nome da organização é obrigatório.");
+                return;
+            }
+
+            if (cadastrar_usuario && !email) {
+                alert("Email é obrigatório quando o cadastro de usuário está marcado.");
                 return;
             }
 
@@ -229,9 +307,8 @@ def index():
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         nome: nome_org,
-                        unidade: nome_unidade,
-                        email: email,
-                        qtd_usuarios: parseInt(qtd_usuarios)
+                        cadastrar_usuario,
+                        email: cadastrar_usuario ? email : null
                     })
                 });
 
@@ -240,12 +317,13 @@ def index():
                 if (data.status === "ok") {
                     container.className = "mt-4 p-4 rounded-lg border bg-emerald-50 border-emerald-200 text-emerald-700 block";
                     document.getElementById("msgHeader").innerText = "Sucesso!";
-                    document.getElementById("msgBody").innerText = `Convite enviado para ${email}. Link: ${data.link_convite || ''}`;
+                    const info = data.link_convite ? `Convite enviado para ${email}. Link: ${data.link_convite}` : `Organização ${data.schema} criada.`;
+                    document.getElementById("msgBody").innerText = info;
 
                     document.getElementById("nome_org").value = "";
-                    document.getElementById("nome_unidade").value = "";
+                    document.getElementById("cadastrar_usuario").checked = false;
                     document.getElementById("email").value = "";
-                    document.getElementById("qtd_usuarios").value = "1";
+                    toggleEmail();
 
                     listarOrgs();
                 } else {
@@ -266,6 +344,12 @@ def index():
         setTimeout(animaNuvem, 500);
     </script>
     """
+    # 7. Ajuste no cabeçalho da tabela do Grid
+    html = html.replace(
+        '<th class="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>',
+        '<th class="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>\n                                    <th class="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Primeiro usuário</th>'
+    )
+
     # Usando render_template_string para garantir que o Jinja2 renderize o conteúdo original se houver
     return render_template_string(html.replace('</body>', f"{script_js}</body>"))
 
@@ -278,32 +362,107 @@ def get_proximo_id():
 
 @app.route("/organizacoes")
 def listar_orgs():
-    """Retorna a lista de organizações para o Grid View"""
+    """Retorna a lista de organizações para o Grid View com status do usuário"""
     conn = conectar()
     if not conn: return jsonify([])
 
     cur = conn.cursor()
-    cur.execute("SELECT numero, nome, schema FROM public.tbl_organizacoes ORDER BY numero DESC")
+    # Verifica se existe usuário ou convite pendente
+    cur.execute("""
+        SELECT
+            o.numero,
+            o.nome,
+            o.schema,
+            o.id,
+            EXISTS(SELECT 1 FROM public.tbl_usuarios u WHERE u.organizacao_id = o.id) as tem_usuario,
+            EXISTS(SELECT 1 FROM public.tbl_convites_usuarios c WHERE c.organizacao_id = o.id AND c.usado = FALSE) as tem_convite
+        FROM public.tbl_organizacoes o
+        ORDER BY o.numero DESC
+    """)
     rows = cur.fetchall()
     cur.close()
     conn.close()
 
-    lista = [{"numero": r[0], "nome": r[1], "schema": r[2]} for r in rows]
+    lista = []
+    for r in rows:
+        status_usuario = "Ativo" if r[4] else "Não ativo"
+        lista.append({
+            "numero": r[0],
+            "nome": r[1],
+            "schema": r[2],
+            "id": r[3],
+            "status_usuario": status_usuario,
+            "pode_ativar": not r[4] and not r[5]
+        })
     return jsonify(lista)
 
 @app.route("/criar-organizacao", methods=["POST"])
 def criar_org():
     data = request.json
     nome = data.get("nome")
-    unidade = data.get("unidade")
+    cadastrar_usuario = data.get("cadastrar_usuario", False)
     email = data.get("email")
-    qtd_usuarios = data.get("qtd_usuarios", 1)
 
-    if not nome or not email or not unidade:
-        return jsonify({"status": "erro", "mensagem": "Todos os campos são obrigatórios"}), 400
+    if not nome:
+        return jsonify({"status": "erro", "mensagem": "Nome da organização é obrigatório"}), 400
 
-    if int(qtd_usuarios) < 1:
-        return jsonify({"status": "erro", "mensagem": "Quantidade de usuários deve ser pelo menos 1"}), 400
+    if cadastrar_usuario:
+        if not email or not re.match(r"[^@]+@[^@]+\.[^@]+", email):
+            return jsonify({"status": "erro", "mensagem": "Email inválido ou não fornecido"}), 400
+
+    conn = conectar()
+    if not conn:
+        return jsonify({"status": "erro", "mensagem": "Erro de conexão com o banco"}), 500
+
+    try:
+        # 1. Define o número sequencial de forma atômica
+        numero = proximo_numero()
+        schema = f"org_{str(numero).zfill(4)}"
+
+        cur = conn.cursor()
+
+        # 2. Registra na tabela pública
+        cur.execute("""
+            INSERT INTO public.tbl_organizacoes (numero, nome, schema)
+            VALUES (%s, %s, %s) RETURNING id
+        """, (numero, nome, schema))
+        org_id = cur.fetchone()[0]
+
+        # 3. Cria o Schema físico
+        cur.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
+
+        # 4. Popula o schema com as tabelas do schema_base.sql
+        executar_schema(conn, schema)
+
+        link_convite = None
+        if cadastrar_usuario:
+            # 5. Gera token de convite
+            token = str(uuid.uuid4())
+            cur.execute("""
+                INSERT INTO public.tbl_convites_usuarios (email, token, organizacao_id)
+                VALUES (%s, %s, %s)
+            """, (email, token, org_id))
+            link_convite = f"/primeiro-acesso?token={token}"
+            print(f"SIMULAÇÃO ENVIO EMAIL PARA {email}: Bem-vindo! Crie sua conta aqui: {link_convite}")
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return jsonify({"status": "ok", "schema": schema, "link_convite": link_convite})
+
+    except Exception as e:
+        if conn: conn.close()
+        return jsonify({"status": "erro", "mensagem": str(e)}), 500
+
+@app.route("/ativar-usuario", methods=["POST"])
+def ativar_usuario():
+    data = request.json
+    org_id = data.get("org_id")
+    email = data.get("email")
+
+    if not org_id or not email:
+        return jsonify({"status": "erro", "mensagem": "ID da organização e email são obrigatórios"}), 400
 
     if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
         return jsonify({"status": "erro", "mensagem": "Email inválido"}), 400
@@ -313,19 +472,19 @@ def criar_org():
         return jsonify({"status": "erro", "mensagem": "Erro de conexão com o banco"}), 500
 
     try:
-        numero = proximo_numero()
-        schema = f"org_{str(numero).zfill(4)}"
-
         cur = conn.cursor()
-        cur.execute("""
-            INSERT INTO public.tbl_organizacoes (numero, nome, nome_unidade, schema, qtd_usuarios_limite)
-            VALUES (%s, %s, %s, %s, %s) RETURNING id
-        """, (numero, nome, unidade, schema, qtd_usuarios))
-        org_id = cur.fetchone()[0]
 
-        cur.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
-        executar_schema(conn, schema)
+        # 1. Verifica se já existe um usuário ativo
+        cur.execute("SELECT 1 FROM public.tbl_usuarios WHERE organizacao_id = %s", (org_id,))
+        if cur.fetchone():
+            return jsonify({"status": "erro", "mensagem": "Esta organização já possui um usuário ativo"}), 400
 
+        # 2. Verifica se já existe um convite pendente
+        cur.execute("SELECT 1 FROM public.tbl_convites_usuarios WHERE organizacao_id = %s AND usado = FALSE", (org_id,))
+        if cur.fetchone():
+            return jsonify({"status": "erro", "mensagem": "Já existe um convite pendente para esta organização"}), 400
+
+        # 3. Gera novo convite
         token = str(uuid.uuid4())
         cur.execute("""
             INSERT INTO public.tbl_convites_usuarios (email, token, organizacao_id)
@@ -337,9 +496,9 @@ def criar_org():
         conn.close()
 
         link_convite = f"/primeiro-acesso?token={token}"
-        print(f"SIMULAÇÃO ENVIO EMAIL PARA {email}: Bem-vindo! Crie sua conta aqui: {link_convite}")
+        print(f"SIMULAÇÃO ENVIO EMAIL ATIVAÇÃO PARA {email}: Link: {link_convite}")
 
-        return jsonify({"status": "ok", "schema": schema, "link_convite": link_convite})
+        return jsonify({"status": "ok", "link_convite": link_convite})
 
     except Exception as e:
         if conn: conn.close()
